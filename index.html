@@ -93,7 +93,13 @@ const cleanId = (str) => {
                 for (let c of line) { if (c === '"') q = !q; else if (c === ',' && !q) { r.push(cur.trim()); cur = ''; } else cur += c; }
                 r.push(cur.trim()); r.push(index);
                 return r;
-            }).filter(a => a.length >= 12);
+            }).filter(a => {
+    // 1. 获取第9列（下标8）的内容，并去除空格和可能存在的引号
+    const inviteId = a[8] ? a[8].replace(/["']/g, '').trim() : "";
+    
+    // 2. 只有当“邀请ID”不为空时，才认为这是一行有效的商品数据
+    return inviteId !== "";
+});
             initFilters(); applyFilters();
         } catch (e) { console.error(e); }
     }
