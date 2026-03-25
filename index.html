@@ -119,20 +119,17 @@
         let cleanStr = dateStr.toString().trim();
         
         // 支持格式: YYYY-MM-DD 或 YYYY/MM/DD
-        // 使用正则提取年月日
         const match = cleanStr.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
         if (match) {
             const year = parseInt(match[1]);
-            const month = parseInt(match[2]) - 1; // JS月份从0开始
+            const month = parseInt(match[2]) - 1;
             const day = parseInt(match[3]);
             const date = new Date(year, month, day);
-            // 验证日期是否有效
             if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
                 return date;
             }
         }
         
-        // 尝试直接解析
         const date = new Date(cleanStr);
         if (!isNaN(date.getTime())) {
             return date;
@@ -171,7 +168,15 @@
             const res = await fetch('data.csv');
             const text = await res.text();
             
-            products = text.split(/\r?\n/).slice(1).map((line, index) => {
+            // 解析CSV，保留所有行，不过滤任何数据
+            const allRows = text.split(/\r?\n/).slice(1);
+            products = [];
+            
+            for (let i = 0; i < allRows.length; i++) {
+                const line = allRows[i];
+                if (!line.trim()) continue; // 跳过空行
+                
+                // 解析CSV行，处理引号内的逗号
                 let r = [], cur = '', q = false;
                 for (let c of line) { 
                     if (c === '"') q = !q; 
@@ -180,15 +185,21 @@
                         cur = ''; 
                     } else cur += c; 
                 }
-                r.push(cur.trim()); 
-                r.push(index);
-                return r;
-            }).filter(a => {
-                const inviteId = a[8] ? a[8].replace(/["']/g, '').trim() : "";
-                return inviteId !== "" && a.length >= 13;
-            });
+                r.push(cur.trim());
+                
+                // 确保有足够的数据列（至少13列）
+                while (r.length < 17) {
+                    r.push('');
+                }
+                
+                // 添加索引
+                r.push(i);
+                products.push(r);
+            }
             
-            // 强制按日期最新排序
+            console.log('原始数据总数:', products.length);
+            
+            // 按日期最新排序
             products = sortByDateDesc(products);
             
             initFilters();
@@ -233,6 +244,8 @@
             link1688: arr[10] || "",
             judge: arr[11] || "",
             date: arr[12] || "",
+            itemid: arr[13] || "",
+            maxPrice: arr[14] || "",
             specialTag: arr[15] || "",
             modelCount: arr[16] || "1"
         };
@@ -259,7 +272,7 @@
             const safeTitle = item.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             const safeVariant = item.variant.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             card.innerHTML = `
-                <div class="judge-tag ${item.judge === 'P0' ? 'bg-p0' : (item.judge === 'P1' ? 'bg-p1' : '')}" onclick="checkLink('${item.link1688.replace(/'/g, "\\'")}')">${item.judge}</div>
+                <div class="judge-tag ${item.judge === 'P0' ? 'bg-p0' : (item.judge === 'P1' ? 'bg-p1' : '')}" onclick="checkLink('${item.link1688.replace(/'/g, "\\'")}')">${item.judge || 'N/A'}</div>
                 ${item.specialTag ? `<div class="special-tag">${item.specialTag}</div>` : ''}
                 <div class="img-container" ondblclick="document.getElementById('modalImg').src='${item.imgUrl.replace(/'/g, "\\'")}'; document.getElementById('imageModal').style.display='flex';">
                     <img src="${item.imgUrl}" loading="lazy" onerror="this.src='https://via.placeholder.com/280x220?text=图片加载失败'">
@@ -272,7 +285,7 @@
                     </div>
                     <div class="invite-row">
                         <div class="model-count-tag">${item.modelCount}款</div>
-                        <div class="invite-id-box" onclick="navigator.clipboard.writeText('${item.inviteId.replace(/'/g, "\\'")}'); alert('已复制ID: ${item.inviteId}')">${item.inviteId}</div>
+                        <div class="invite-id-box" onclick="navigator.clipboard.writeText('${item.inviteId.replace(/'/g, "\\'")}'); alert('已复制ID: ${item.inviteId}')">${item.inviteId || '无ID'}</div>
                     </div>
                     <div class="footer-row">
                         <span class="date-badge">📅 ${item.date || '日期未知'}</span>
@@ -288,7 +301,7 @@
     function renderPagination(total) {
         const totalPages = Math.ceil(total / pageSize);
         const p = document.getElementById('pagination');
-        if (totalPages === 0) {
+        if (totalPages === 0 || totalPages === 1) {
             p.innerHTML = '';
             return;
         }
@@ -324,7 +337,7 @@
         
         let filtered = products.filter(arr => {
             const i = mapData(arr);
-            const matchSearch = i.title.toLowerCase().includes(q) || i.inviteId.toLowerCase().includes(q);
+            const matchSearch = !q || i.title.toLowerCase().includes(q) || i.inviteId.toLowerCase().includes(q);
             const matchL1 = !l1 || i.l1 === l1;
             const matchL2 = !l2 || i.l2 === l2;
             const matchL3 = !l3 || i.l3 === l3;
@@ -354,15 +367,27 @@
     }
 
     function initFilters() {
-        const l1Set = new Set(products.map(p => p[5]).filter(v => v && v.trim()));
+        // 初始化一级类目
+        const l1Set = new Set();
+        products.forEach(p => {
+            if (p[5] && p[5].trim()) {
+                l1Set.add(p[5]);
+            }
+        });
         const l1Select = document.getElementById('l1Filter');
-        l1Set.forEach(v => {
+        Array.from(l1Set).sort().forEach(v => {
             l1Select.innerHTML += `<option value="${v.replace(/"/g, '&quot;')}">${v}</option>`;
         });
         
-        const tagSet = new Set(products.map(p => p[15]?.trim()).filter(v => v));
+        // 初始化特殊标签
+        const tagSet = new Set();
+        products.forEach(p => {
+            if (p[15] && p[15].trim()) {
+                tagSet.add(p[15]);
+            }
+        });
         const tagSelect = document.getElementById('tagFilter');
-        tagSet.forEach(v => {
+        Array.from(tagSet).sort().forEach(v => {
             tagSelect.innerHTML += `<option value="${v.replace(/"/g, '&quot;')}">${v}</option>`;
         });
     }
@@ -377,13 +402,14 @@
         
         if (!l1) return;
         
-        const l2Set = new Set(
-            products.filter(p => p[5] === l1)
-                    .map(p => p[6])
-                    .filter(v => v && v.trim())
-        );
+        const l2Set = new Set();
+        products.forEach(p => {
+            if (p[5] === l1 && p[6] && p[6].trim()) {
+                l2Set.add(p[6]);
+            }
+        });
         
-        l2Set.forEach(v => {
+        Array.from(l2Set).sort().forEach(v => {
             l2Select.innerHTML += `<option value="${v.replace(/"/g, '&quot;')}">${v}</option>`;
         });
     }
@@ -397,17 +423,14 @@
         
         if (!l1) return;
         
-        let filteredProducts = products.filter(p => p[5] === l1);
-        if (l2) {
-            filteredProducts = filteredProducts.filter(p => p[6] === l2);
-        }
+        const l3Set = new Set();
+        products.forEach(p => {
+            if (p[5] === l1 && (!l2 || p[6] === l2) && p[7] && p[7].trim()) {
+                l3Set.add(p[7]);
+            }
+        });
         
-        const l3Set = new Set(
-            filteredProducts.map(p => p[7])
-                            .filter(v => v && v.trim())
-        );
-        
-        l3Set.forEach(v => {
+        Array.from(l3Set).sort().forEach(v => {
             l3Select.innerHTML += `<option value="${v.replace(/"/g, '&quot;')}">${v}</option>`;
         });
     }
