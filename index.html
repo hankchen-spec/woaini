@@ -38,13 +38,6 @@
         .category-row select {
             min-width: 120px;
         }
-        .date-badge {
-            background: #f0f0f0;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 10px;
-            color: #666;
-        }
     </style>
 </head>
 <body>
@@ -55,7 +48,7 @@
 🔥优先选P0：P0 级产品更优 | P1次之 | P2常规款<br>
 💰高效提报：单击红框 ID 快速复制，搜索该 ID 报满所有型号流量翻倍！<br>
 💹1688参考价格： 点击左上角查看参考链接<br>
-📁 支持三级分类筛选：一级类目 → 二级类目 → 三级类目<br>
+📁 支持三级分类筛选：一级类目 → 二级类目 → 三级类目
         </div>
     </header>
     <div class="filter-section">
@@ -83,8 +76,7 @@
         <input type="number" id="minPrice" placeholder="最低价" oninput="debouncedFilter()">
         <input type="number" id="maxPrice" placeholder="最高价" oninput="debouncedFilter()">
         <select id="sortOrder" onchange="applyFilters()">
-            <option value="dateDesc" selected>日期最新优先</option>
-            <option value="dateAsc">日期最早优先</option>
+            <option value="default">默认排序</option>
             <option value="priceAsc">价格升序</option>
             <option value="priceDesc">价格降序</option>
         </select>
@@ -103,80 +95,22 @@
         }
     };
 
+    console.log("%c⚠️ 发现非法查看源码行为", "color: red; font-size: 20px; font-weight: bold;");
+    console.log("Designed by Ethan Cai. 复制前请联系原作者。");
     let products = [], filteredData = [], currentPage = 1;
     const pageSize = 40;
     
+    // cleanId 函数，确保能处理掉各种前导字符
     const cleanId = (str) => {
         if (!str) return "";
         return str.toString().replace(/^['+]+/, '').replace(/["=\t]/g, '').trim();
     };
-    
-    // 修复日期解析函数 - 正确解析日期字符串为Date对象
-    function parseDate(dateStr) {
-        if (!dateStr || dateStr === "") return new Date(0);
-        
-        // 清理字符串
-        let cleanStr = dateStr.toString().trim();
-        
-        // 支持格式: YYYY-MM-DD 或 YYYY/MM/DD
-        const match = cleanStr.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-        if (match) {
-            const year = parseInt(match[1]);
-            const month = parseInt(match[2]) - 1;
-            const day = parseInt(match[3]);
-            const date = new Date(year, month, day);
-            if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
-                return date;
-            }
-        }
-        
-        const date = new Date(cleanStr);
-        if (!isNaN(date.getTime())) {
-            return date;
-        }
-        
-        return new Date(0);
-    }
-    
-    // 日期降序排序（最新的在前）
-    function sortByDateDesc(data) {
-        return [...data].sort((a, b) => {
-            const dateA = parseDate(a[12]);
-            const dateB = parseDate(b[12]);
-            return dateB - dateA;
-        });
-    }
-    
-    function sortByDateAsc(data) {
-        return [...data].sort((a, b) => {
-            const dateA = parseDate(a[12]);
-            const dateB = parseDate(b[12]);
-            return dateA - dateB;
-        });
-    }
-    
-    function sortByPriceAsc(data) {
-        return [...data].sort((a, b) => parseFloat(a[2]) - parseFloat(b[2]));
-    }
-    
-    function sortByPriceDesc(data) {
-        return [...data].sort((a, b) => parseFloat(b[2]) - parseFloat(a[2]));
-    }
 
     async function loadData() {
         try {
             const res = await fetch('data.csv');
             const text = await res.text();
-            
-            // 解析CSV，保留所有行，不过滤任何数据
-            const allRows = text.split(/\r?\n/).slice(1);
-            products = [];
-            
-            for (let i = 0; i < allRows.length; i++) {
-                const line = allRows[i];
-                if (!line.trim()) continue; // 跳过空行
-                
-                // 解析CSV行，处理引号内的逗号
+            products = text.split(/\r?\n/).slice(1).map((line, index) => {
                 let r = [], cur = '', q = false;
                 for (let c of line) { 
                     if (c === '"') q = !q; 
@@ -185,37 +119,22 @@
                         cur = ''; 
                     } else cur += c; 
                 }
-                r.push(cur.trim());
-                
-                // 确保有足够的数据列（至少13列）
-                while (r.length < 17) {
-                    r.push('');
-                }
-                
-                // 添加索引
-                r.push(i);
-                products.push(r);
-            }
-            
-            console.log('原始数据总数:', products.length);
-            
-            // 按日期最新排序
-            products = sortByDateDesc(products);
-            
-            initFilters();
-            
-            filteredData = [...products];
-            
-            render(filteredData, 1);
-            
-            document.getElementById('countDisplay').innerText = `共 ${filteredData.length} 款商品`;
-            
+                r.push(cur.trim()); 
+                r.push(index);
+                return r;
+            }).filter(a => {
+                // 验证数据有效性：邀请ID不为空（第9列，索引8）
+                const inviteId = a[8] ? a[8].replace(/["']/g, '').trim() : "";
+                return inviteId !== "";
+            });
+            initFilters(); 
+            applyFilters();
         } catch (e) { 
             console.error('数据加载失败:', e); 
-            alert('数据加载失败，请检查data.csv文件是否存在');
         }
     }
 
+    // 修复 1688 链接解析
     function checkLink(rawUrl) {
         if (!rawUrl) { 
             alert('❌ 无核价链接'); 
@@ -229,6 +148,12 @@
         }
     }
 
+    // mapData 函数 - 根据实际CSV字段顺序映射
+    // 索引对应关系：
+    // 0: title, 1: variant, 2: price, 3: imgUrl, 4: link, 
+    // 5: l1, 6: l2, 7: l3, 8: inviteId, 9: modelId, 
+    // 10: final_1688_link, 11: price judge, 12: update date, 
+    // 13: itemid, 14: 最大价格, 15: tag, 16: 共有model数
     const mapData = (arr) => {
         return {
             title: arr[0] || "",
@@ -238,16 +163,14 @@
             link: arr[4] || "",
             l1: arr[5] || "",
             l2: arr[6] || "",
-            l3: arr[7] || "",
+            l3: arr[7] || "",           // 三级类目（新增）
             inviteId: cleanId(arr[8] || ""),
             modelId: cleanId(arr[9] || ""),
             link1688: arr[10] || "",
-            judge: arr[11] || "",
-            date: arr[12] || "",
-            itemid: arr[13] || "",
-            maxPrice: arr[14] || "",
-            specialTag: arr[15] || "",
-            modelCount: arr[16] || "1"
+            judge: arr[11] || "",         // price judge
+            date: arr[12] || "",          // update date
+            specialTag: arr[15] || "",    // tag
+            modelCount: arr[16] || "1"    // 共有model数
         };
     };
 
@@ -259,20 +182,15 @@
         const end = start + pageSize;
         const pageData = dataList.slice(start, end);
         
-        if (pageData.length === 0) {
-            grid.innerHTML = '<div style="text-align:center; padding:50px; color:#999;">暂无数据</div>';
-            renderPagination(0);
-            return;
-        }
-        
         pageData.forEach(arr => {
             const item = mapData(arr);
             const card = document.createElement('div');
             card.className = 'card';
+            // 转义特殊字符防止XSS
             const safeTitle = item.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             const safeVariant = item.variant.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             card.innerHTML = `
-                <div class="judge-tag ${item.judge === 'P0' ? 'bg-p0' : (item.judge === 'P1' ? 'bg-p1' : '')}" onclick="checkLink('${item.link1688.replace(/'/g, "\\'")}')">${item.judge || 'N/A'}</div>
+                <div class="judge-tag ${item.judge === 'P0' ? 'bg-p0' : (item.judge === 'P1' ? 'bg-p1' : '')}" onclick="checkLink('${item.link1688.replace(/'/g, "\\'")}')">${item.judge}</div>
                 ${item.specialTag ? `<div class="special-tag">${item.specialTag}</div>` : ''}
                 <div class="img-container" ondblclick="document.getElementById('modalImg').src='${item.imgUrl.replace(/'/g, "\\'")}'; document.getElementById('imageModal').style.display='flex';">
                     <img src="${item.imgUrl}" loading="lazy" onerror="this.src='https://via.placeholder.com/280x220?text=图片加载失败'">
@@ -285,10 +203,10 @@
                     </div>
                     <div class="invite-row">
                         <div class="model-count-tag">${item.modelCount}款</div>
-                        <div class="invite-id-box" onclick="navigator.clipboard.writeText('${item.inviteId.replace(/'/g, "\\'")}'); alert('已复制ID: ${item.inviteId}')">${item.inviteId || '无ID'}</div>
+                        <div class="invite-id-box" onclick="navigator.clipboard.writeText('${item.inviteId.replace(/'/g, "\\'")}'); alert('已复制ID: ${item.inviteId}')">${item.inviteId}</div>
                     </div>
                     <div class="footer-row">
-                        <span class="date-badge">📅 ${item.date || '日期未知'}</span>
+                        <span>${item.date}</span>
                         <span style="font-weight:bold; color:#555;">${item.modelId}</span>
                         <a href="${item.link}" target="_blank" class="btn-link" rel="noopener noreferrer">原品 >>></a>
                     </div>
@@ -301,13 +219,9 @@
     function renderPagination(total) {
         const totalPages = Math.ceil(total / pageSize);
         const p = document.getElementById('pagination');
-        if (totalPages === 0 || totalPages === 1) {
-            p.innerHTML = '';
-            return;
-        }
         p.innerHTML = `
             <button onclick="changePage(-1)" ${currentPage===1?'disabled':''}>上一页</button>
-            <span style="margin:0 10px;">${currentPage}/${totalPages}</span>
+            <span style="margin:0 10px;">${currentPage}/${totalPages || 1}</span>
             <button onclick="changePage(1)" ${currentPage>=totalPages?'disabled':''}>下一页</button>
             <input type="number" id="jumpPage" style="width:50px; margin-left:10px;" placeholder="页码">
             <button onclick="jumpToPage()">跳转</button>`;
@@ -335,9 +249,9 @@
         const min = parseFloat(document.getElementById('minPrice').value) || 0;
         const max = parseFloat(document.getElementById('maxPrice').value) || Infinity;
         
-        let filtered = products.filter(arr => {
+        filteredData = products.filter(arr => {
             const i = mapData(arr);
-            const matchSearch = !q || i.title.toLowerCase().includes(q) || i.inviteId.toLowerCase().includes(q);
+            const matchSearch = i.title.toLowerCase().includes(q) || i.inviteId.toLowerCase().includes(q);
             const matchL1 = !l1 || i.l1 === l1;
             const matchL2 = !l2 || i.l2 === l2;
             const matchL3 = !l3 || i.l3 === l3;
@@ -348,89 +262,80 @@
             return matchSearch && matchL1 && matchL2 && matchL3 && matchJudge && matchTag && matchPrice;
         });
         
-        const sortType = document.getElementById('sortOrder').value;
-        
-        if (sortType === 'dateDesc') {
-            filtered = sortByDateDesc(filtered);
-        } else if (sortType === 'dateAsc') {
-            filtered = sortByDateAsc(filtered);
-        } else if (sortType === 'priceAsc') {
-            filtered = sortByPriceAsc(filtered);
-        } else if (sortType === 'priceDesc') {
-            filtered = sortByPriceDesc(filtered);
+        const sort = document.getElementById('sortOrder').value;
+        if (sort === 'priceAsc') {
+            filteredData.sort((a,b) => parseFloat(a[2]) - parseFloat(b[2]));
+        } else if (sort === 'priceDesc') {
+            filteredData.sort((a,b) => parseFloat(b[2]) - parseFloat(a[2]));
         }
-        
-        filteredData = filtered;
         
         document.getElementById('countDisplay').innerText = `已筛选：${filteredData.length} 款`;
         render(filteredData, 1);
     }
 
     function initFilters() {
-        // 初始化一级类目
-        const l1Set = new Set();
-        products.forEach(p => {
-            if (p[5] && p[5].trim()) {
-                l1Set.add(p[5]);
-            }
-        });
+        // 初始化一级类目（索引5）
+        const l1Set = new Set(products.map(p => p[5]).filter(v => v && v.trim()));
         const l1Select = document.getElementById('l1Filter');
-        Array.from(l1Set).sort().forEach(v => {
+        l1Set.forEach(v => {
             l1Select.innerHTML += `<option value="${v.replace(/"/g, '&quot;')}">${v}</option>`;
         });
         
-        // 初始化特殊标签
-        const tagSet = new Set();
-        products.forEach(p => {
-            if (p[15] && p[15].trim()) {
-                tagSet.add(p[15]);
-            }
-        });
+        // 初始化特殊标签（索引15）
+        const tagSet = new Set(products.map(p => p[15]?.trim()).filter(v => v));
         const tagSelect = document.getElementById('tagFilter');
-        Array.from(tagSet).sort().forEach(v => {
+        tagSet.forEach(v => {
             tagSelect.innerHTML += `<option value="${v.replace(/"/g, '&quot;')}">${v}</option>`;
         });
     }
 
+    // 更新二级类目（基于一级类目）
     function updateL2() {
         const l1 = document.getElementById('l1Filter').value;
         const l2Select = document.getElementById('l2Filter');
         const l3Select = document.getElementById('l3Filter');
         
+        // 重置二级和三级
         l2Select.innerHTML = '<option value="">二级类目(全部)</option>';
         l3Select.innerHTML = '<option value="">三级类目(全部)</option>';
         
         if (!l1) return;
         
-        const l2Set = new Set();
-        products.forEach(p => {
-            if (p[5] === l1 && p[6] && p[6].trim()) {
-                l2Set.add(p[6]);
-            }
-        });
+        // 获取该一级类目下的所有二级类目（索引6）
+        const l2Set = new Set(
+            products.filter(p => p[5] === l1)
+                    .map(p => p[6])
+                    .filter(v => v && v.trim())
+        );
         
-        Array.from(l2Set).sort().forEach(v => {
+        l2Set.forEach(v => {
             l2Select.innerHTML += `<option value="${v.replace(/"/g, '&quot;')}">${v}</option>`;
         });
     }
     
+    // 更新三级类目（基于一级和二级类目）
     function updateL3() {
         const l1 = document.getElementById('l1Filter').value;
         const l2 = document.getElementById('l2Filter').value;
         const l3Select = document.getElementById('l3Filter');
         
+        // 重置三级
         l3Select.innerHTML = '<option value="">三级类目(全部)</option>';
         
         if (!l1) return;
         
-        const l3Set = new Set();
-        products.forEach(p => {
-            if (p[5] === l1 && (!l2 || p[6] === l2) && p[7] && p[7].trim()) {
-                l3Set.add(p[7]);
-            }
-        });
+        let filteredProducts = products.filter(p => p[5] === l1);
+        if (l2) {
+            filteredProducts = filteredProducts.filter(p => p[6] === l2);
+        }
         
-        Array.from(l3Set).sort().forEach(v => {
+        // 获取三级类目（索引7）
+        const l3Set = new Set(
+            filteredProducts.map(p => p[7])
+                            .filter(v => v && v.trim())
+        );
+        
+        l3Set.forEach(v => {
             l3Select.innerHTML += `<option value="${v.replace(/"/g, '&quot;')}">${v}</option>`;
         });
     }
