@@ -84,7 +84,7 @@
         <input type="number" id="minPrice" placeholder="最低价" oninput="debouncedFilter()">
         <input type="number" id="maxPrice" placeholder="最高价" oninput="debouncedFilter()">
         <select id="sortOrder" onchange="applyFilters()">
-            <option value="dateDesc">日期最新优先</option>
+            <option value="dateDesc" selected>日期最新优先</option>
             <option value="dateAsc">日期最早优先</option>
             <option value="priceAsc">价格升序</option>
             <option value="priceDesc">价格降序</option>
@@ -124,6 +124,29 @@
         const date = new Date(cleanDate);
         return isNaN(date.getTime()) ? new Date(0) : date;
     }
+    
+    // 通用的排序函数
+    function sortProducts(data, sortType) {
+        if (sortType === 'priceAsc') {
+            return [...data].sort((a,b) => parseFloat(a[2]) - parseFloat(b[2]));
+        } else if (sortType === 'priceDesc') {
+            return [...data].sort((a,b) => parseFloat(b[2]) - parseFloat(a[2]));
+        } else if (sortType === 'dateDesc') {
+            return [...data].sort((a,b) => {
+                const dateA = parseDate(a[12]);
+                const dateB = parseDate(b[12]);
+                return dateB - dateA;
+            });
+        } else if (sortType === 'dateAsc') {
+            return [...data].sort((a,b) => {
+                const dateA = parseDate(a[12]);
+                const dateB = parseDate(b[12]);
+                return dateA - dateB;
+            });
+        }
+        // default: 返回原数组副本
+        return [...data];
+    }
 
     async function loadData() {
         try {
@@ -147,15 +170,21 @@
                 return inviteId !== "";
             });
             
-            // 按日期降序排序（最新的在前）
-            products.sort((a, b) => {
-                const dateA = parseDate(a[12]); // update date 在索引12
-                const dateB = parseDate(b[12]);
-                return dateB - dateA;
-            });
+            // 初始化分类筛选器
+            initFilters();
             
-            initFilters(); 
-            applyFilters();
+            // 获取当前的排序方式
+            const sortType = document.getElementById('sortOrder').value;
+            
+            // 应用排序（默认按日期最新）
+            filteredData = sortProducts(products, sortType);
+            
+            // 渲染数据
+            render(filteredData, 1);
+            
+            // 更新筛选计数
+            document.getElementById('countDisplay').innerText = `已筛选：${filteredData.length} 款`;
+            
         } catch (e) { 
             console.error('数据加载失败:', e); 
         }
@@ -209,6 +238,12 @@
         const end = start + pageSize;
         const pageData = dataList.slice(start, end);
         
+        if (pageData.length === 0) {
+            grid.innerHTML = '<div style="text-align:center; padding:50px; color:#999;">暂无数据</div>';
+            renderPagination(0);
+            return;
+        }
+        
         pageData.forEach(arr => {
             const item = mapData(arr);
             const card = document.createElement('div');
@@ -246,9 +281,13 @@
     function renderPagination(total) {
         const totalPages = Math.ceil(total / pageSize);
         const p = document.getElementById('pagination');
+        if (totalPages === 0) {
+            p.innerHTML = '';
+            return;
+        }
         p.innerHTML = `
             <button onclick="changePage(-1)" ${currentPage===1?'disabled':''}>上一页</button>
-            <span style="margin:0 10px;">${currentPage}/${totalPages || 1}</span>
+            <span style="margin:0 10px;">${currentPage}/${totalPages}</span>
             <button onclick="changePage(1)" ${currentPage>=totalPages?'disabled':''}>下一页</button>
             <input type="number" id="jumpPage" style="width:50px; margin-left:10px;" placeholder="页码">
             <button onclick="jumpToPage()">跳转</button>`;
@@ -276,7 +315,8 @@
         const min = parseFloat(document.getElementById('minPrice').value) || 0;
         const max = parseFloat(document.getElementById('maxPrice').value) || Infinity;
         
-        filteredData = products.filter(arr => {
+        // 先筛选数据
+        let filtered = products.filter(arr => {
             const i = mapData(arr);
             const matchSearch = i.title.toLowerCase().includes(q) || i.inviteId.toLowerCase().includes(q);
             const matchL1 = !l1 || i.l1 === l1;
@@ -289,25 +329,11 @@
             return matchSearch && matchL1 && matchL2 && matchL3 && matchJudge && matchTag && matchPrice;
         });
         
-        const sort = document.getElementById('sortOrder').value;
-        if (sort === 'priceAsc') {
-            filteredData.sort((a,b) => parseFloat(a[2]) - parseFloat(b[2]));
-        } else if (sort === 'priceDesc') {
-            filteredData.sort((a,b) => parseFloat(b[2]) - parseFloat(a[2]));
-        } else if (sort === 'dateDesc') {
-            filteredData.sort((a,b) => {
-                const dateA = parseDate(a[12]);
-                const dateB = parseDate(b[12]);
-                return dateB - dateA;
-            });
-        } else if (sort === 'dateAsc') {
-            filteredData.sort((a,b) => {
-                const dateA = parseDate(a[12]);
-                const dateB = parseDate(b[12]);
-                return dateA - dateB;
-            });
-        }
-        // default: 保持原有顺序（已在loadData中按日期降序排序）
+        // 获取当前的排序方式
+        const sortType = document.getElementById('sortOrder').value;
+        
+        // 应用排序
+        filteredData = sortProducts(filtered, sortType);
         
         document.getElementById('countDisplay').innerText = `已筛选：${filteredData.length} 款`;
         render(filteredData, 1);
