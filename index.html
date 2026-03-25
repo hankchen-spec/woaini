@@ -38,6 +38,13 @@
         .category-row select {
             min-width: 120px;
         }
+        .date-badge {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -48,7 +55,8 @@
 🔥优先选P0：P0 级产品更优 | P1次之 | P2常规款<br>
 💰高效提报：单击红框 ID 快速复制，搜索该 ID 报满所有型号流量翻倍！<br>
 💹1688参考价格： 点击左上角查看参考链接<br>
-📁 支持三级分类筛选：一级类目 → 二级类目 → 三级类目
+📁 支持三级分类筛选：一级类目 → 二级类目 → 三级类目<br>
+🕐 默认按更新时间最新优先展示
         </div>
     </header>
     <div class="filter-section">
@@ -76,9 +84,11 @@
         <input type="number" id="minPrice" placeholder="最低价" oninput="debouncedFilter()">
         <input type="number" id="maxPrice" placeholder="最高价" oninput="debouncedFilter()">
         <select id="sortOrder" onchange="applyFilters()">
-            <option value="default">默认排序</option>
+            <option value="dateDesc">日期最新优先</option>
+            <option value="dateAsc">日期最早优先</option>
             <option value="priceAsc">价格升序</option>
             <option value="priceDesc">价格降序</option>
+            <option value="default">默认排序</option>
         </select>
         <span id="countDisplay" style="font-weight:bold; color:#ee4d2d; margin-left:auto;"></span>
     </div>
@@ -105,6 +115,15 @@
         if (!str) return "";
         return str.toString().replace(/^['+]+/, '').replace(/["=\t]/g, '').trim();
     };
+    
+    // 解析日期字符串，支持多种格式
+    function parseDate(dateStr) {
+        if (!dateStr) return new Date(0);
+        // 尝试解析 YYYY-MM-DD 或 YYYY/MM/DD 格式
+        let cleanDate = dateStr.replace(/[\/\-]/g, '-');
+        const date = new Date(cleanDate);
+        return isNaN(date.getTime()) ? new Date(0) : date;
+    }
 
     async function loadData() {
         try {
@@ -127,6 +146,14 @@
                 const inviteId = a[8] ? a[8].replace(/["']/g, '').trim() : "";
                 return inviteId !== "";
             });
+            
+            // 按日期降序排序（最新的在前）
+            products.sort((a, b) => {
+                const dateA = parseDate(a[12]); // update date 在索引12
+                const dateB = parseDate(b[12]);
+                return dateB - dateA;
+            });
+            
             initFilters(); 
             applyFilters();
         } catch (e) { 
@@ -206,7 +233,7 @@
                         <div class="invite-id-box" onclick="navigator.clipboard.writeText('${item.inviteId.replace(/'/g, "\\'")}'); alert('已复制ID: ${item.inviteId}')">${item.inviteId}</div>
                     </div>
                     <div class="footer-row">
-                        <span>${item.date}</span>
+                        <span class="date-badge">📅 ${item.date}</span>
                         <span style="font-weight:bold; color:#555;">${item.modelId}</span>
                         <a href="${item.link}" target="_blank" class="btn-link" rel="noopener noreferrer">原品 >>></a>
                     </div>
@@ -267,7 +294,20 @@
             filteredData.sort((a,b) => parseFloat(a[2]) - parseFloat(b[2]));
         } else if (sort === 'priceDesc') {
             filteredData.sort((a,b) => parseFloat(b[2]) - parseFloat(a[2]));
+        } else if (sort === 'dateDesc') {
+            filteredData.sort((a,b) => {
+                const dateA = parseDate(a[12]);
+                const dateB = parseDate(b[12]);
+                return dateB - dateA;
+            });
+        } else if (sort === 'dateAsc') {
+            filteredData.sort((a,b) => {
+                const dateA = parseDate(a[12]);
+                const dateB = parseDate(b[12]);
+                return dateA - dateB;
+            });
         }
+        // default: 保持原有顺序（已在loadData中按日期降序排序）
         
         document.getElementById('countDisplay').innerText = `已筛选：${filteredData.length} 款`;
         render(filteredData, 1);
