@@ -164,50 +164,66 @@
             modelId: cleanId(arr[9] || ""),
             link1688: arr[10] || "",
             judge: arr[11] || "",
-            date: cleanDate(arr[12] || ""),  // 使用cleanDate清理日期
+            date: cleanDate(arr[12] || ""),
             specialTag: arr[15] || "",
             modelCount: arr[16] || "1"
         };
     };
+
+    // 改进的CSV解析函数 - 处理带引号的字段
+    function parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let insideQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+                // 处理双引号转义（两个双引号表示一个双引号）
+                if (insideQuotes && i + 1 < line.length && line[i + 1] === '"') {
+                    current += '"';
+                    i++; // 跳过第二个双引号
+                } else {
+                    insideQuotes = !insideQuotes;
+                }
+            } else if (char === ',' && !insideQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        result.push(current.trim());
+        return result;
+    }
 
     async function loadData() {
         const grid = document.getElementById('productGrid');
         try {
             const res = await fetch('data.csv');
             
-            // 检查响应状态
             if (!res.ok) {
                 throw new Error(`HTTP ${res.status}: ${res.statusText}`);
             }
             
             const text = await res.text();
             
-            // 检查是否有数据
             if (!text.trim()) {
                 throw new Error('数据文件为空');
             }
             
-            // 解析CSV
             const lines = text.split(/\r?\n/).filter(line => line.trim());
             if (lines.length < 2) {
                 throw new Error('数据文件格式错误：缺少表头或数据行');
             }
             
-            // 从第2行开始解析（跳过表头）
+            // 使用改进的解析函数
             products = lines.slice(1).map((line, index) => {
-                let r = [], cur = '', q = false;
-                for (let c of line) { 
-                    if (c === '"') q = !q; 
-                    else if (c === ',' && !q) { 
-                        r.push(cur.trim()); 
-                        cur = ''; 
-                    } else cur += c; 
-                }
-                r.push(cur.trim()); 
-                r.push(index);
-                return r;
+                const parsed = parseCSVLine(line);
+                parsed.push(index);
+                return parsed;
             }).filter(a => {
-                // 验证数据有效性：邀请ID不为空（第9列，索引8）
                 const inviteId = a[8] ? a[8].replace(/["']/g, '').trim() : "";
                 return inviteId !== "" && a.length >= 10;
             });
@@ -219,15 +235,27 @@
             console.log(`✅ 成功加载 ${products.length} 条数据`);
             
             // 调试：检查日期数据
-            const dateSample = products.slice(0, 5).map(p => ({
-                raw: p[12],
-                cleaned: cleanDate(p[12] || '')
+            const dateSample = products.slice(0, 10).map((p, idx) => ({
+                index: idx,
+                rowLength: p.length,
+                dateRaw: p[12] || '(空)',
+                dateCleaned: cleanDate(p[12] || ''),
+                inviteId: p[8]
             }));
-            console.log('📅 日期数据样本:', dateSample);
+            console.log('📅 日期数据样本 (前10条):', dateSample);
             
-            // 初始化筛选器
+            // 统计日期为空的数量
+            const emptyDates = products.filter(p => !p[12] || p[12].trim() === '' || p[12].trim() === '""' || p[12].trim() === "''");
+            console.log(`📅 日期为空的记录数: ${emptyDates.length} / ${products.length}`);
+            if (emptyDates.length > 0) {
+                console.log('空日期记录样本:', emptyDates.slice(0, 5).map(p => ({ 
+                    inviteId: p[8], 
+                    dateRaw: p[12],
+                    rowLength: p.length 
+                })));
+            }
+            
             initFilters(); 
-            // 应用筛选并渲染
             applyFilters();
             
         } catch (e) { 
@@ -243,7 +271,6 @@
         }
     }
 
-    // 检查1688链接
     function checkLink(rawUrl) {
         if (!rawUrl) { 
             alert('❌ 无核价链接'); 
@@ -257,7 +284,6 @@
         }
     }
 
-    // 渲染产品
     function render(dataList, page = 1) {
         currentPage = page;
         const grid = document.getElementById('productGrid');
@@ -278,15 +304,15 @@
             const card = document.createElement('div');
             card.className = 'card';
             
-            // 安全处理字符串
             const safeTitle = item.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             const safeVariant = item.variant.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             const safeInviteId = item.inviteId.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             const safeImgUrl = item.imgUrl.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             const safeLink1688 = item.link1688.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             
-            // 修复：更严格的日期判断 - 检查是否有实际内容且不是空字符串
-            const dateDisplay = (item.date && item.date.length > 0 && item.date !== '""' && item.date !== "''") ? item.date : '日期待更新';
+            // 严格判断日期是否有效
+            const hasValidDate = item.date && item.date.length > 0 && item.date !== '""' && item.date !== "''";
+            const dateDisplay = hasValidDate ? item.date : '日期待更新';
             
             card.innerHTML = `
                 <div class="judge-tag" onclick="checkLink('${safeLink1688}')">1688</div>
@@ -385,14 +411,12 @@
     }
 
     function initFilters() {
-        // 初始化一级类目（索引5）
         const l1Set = new Set(products.map(p => p[5]).filter(v => v && v.trim()));
         const l1Select = document.getElementById('l1Filter');
         l1Set.forEach(v => {
             l1Select.innerHTML += `<option value="${v.replace(/"/g, '&quot;')}">${v}</option>`;
         });
         
-        // 初始化特殊标签（索引15）
         const tagSet = new Set(products.map(p => p[15]?.trim()).filter(v => v));
         const tagSelect = document.getElementById('tagFilter');
         tagSet.forEach(v => {
@@ -400,7 +424,6 @@
         });
     }
 
-    // 更新二级类目
     function updateL2() {
         const l1 = document.getElementById('l1Filter').value;
         const l2Select = document.getElementById('l2Filter');
@@ -422,7 +445,6 @@
         });
     }
     
-    // 更新三级类目
     function updateL3() {
         const l1 = document.getElementById('l1Filter').value;
         const l2 = document.getElementById('l2Filter').value;
@@ -447,14 +469,12 @@
         });
     }
 
-    // 防抖函数
     let timer; 
     const debouncedFilter = () => { 
         clearTimeout(timer); 
         timer = setTimeout(applyFilters, 300); 
     };
     
-    // 页面加载完成后加载数据
     window.onload = loadData;
 </script>
 
