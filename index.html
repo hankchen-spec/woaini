@@ -13,9 +13,23 @@
         .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
         .card { background: white; border-radius: 8px; overflow: hidden; border: 1px solid #eee; transition: 0.3s; position: relative; display: flex; flex-direction: column; }
         .card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        .judge-tag { position: absolute; top: 10px; left: 10px; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: pointer; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .bg-p0 { background: #d4edda; color: #155724; }
-        .bg-p1 { background: #d1ecf1; color: #0c5460; }
+        .judge-tag { 
+            position: absolute; 
+            top: 10px; 
+            left: 10px; 
+            padding: 4px 8px; 
+            border-radius: 4px; 
+            font-size: 12px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            z-index: 10; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: #007bff;
+            color: white;
+        }
+        .judge-tag:hover {
+            background: #0056b3;
+        }
         .special-tag { position: absolute; top: 10px; right: 10px; background: linear-gradient(90deg, #ff7a18, #e52e71); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; z-index: 10; }
         .img-container { width: 100%; height: 220px; background: #fff; overflow: hidden; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: center; cursor: zoom-in; }
         .img-container img { max-width: 100%; max-height: 100%; object-fit: contain; }
@@ -75,13 +89,6 @@
                     <option value="">三级类目(全部)</option>
                 </select>
             </div>
-            
-            <!-- 补充缺失的 pFilter -->
-            <select id="pFilter" onchange="applyFilters()">
-                <option value="">价格判定(全部)</option>
-                <option value="P0">P0</option>
-                <option value="P1">P1</option>
-            </select>
             
             <select id="tagFilter" onchange="applyFilters()">
                 <option value="">特殊标签(全部)</option>
@@ -266,7 +273,7 @@
             const safeLink1688 = item.link1688.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             
             card.innerHTML = `
-                <div class="judge-tag ${item.judge === 'P0' ? 'bg-p0' : (item.judge === 'P1' ? 'bg-p1' : '')}" onclick="checkLink('${safeLink1688}')">${item.judge || 'N/A'}</div>
+                <div class="judge-tag" onclick="checkLink('${safeLink1688}')">1688参考</div>
                 ${item.specialTag ? `<div class="special-tag">${item.specialTag}</div>` : ''}
                 <div class="img-container" ondblclick="document.getElementById('modalImg').src='${safeImgUrl}'; document.getElementById('imageModal').style.display='flex';">
                     <img src="${safeImgUrl}" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22280%22 height=%22220%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22280%22 height=%22220%22/%3E%3Ctext x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-size=%2214%22%3E图片加载失败%3C/text%3E%3C/svg%3E'">
@@ -334,7 +341,6 @@
         const l1 = document.getElementById('l1Filter').value;
         const l2 = document.getElementById('l2Filter').value;
         const l3 = document.getElementById('l3Filter').value;
-        const p = document.getElementById('pFilter').value;
         const tag = document.getElementById('tagFilter').value;
         const min = parseFloat(document.getElementById('minPrice').value) || 0;
         const max = parseFloat(document.getElementById('maxPrice').value) || Infinity;
@@ -345,11 +351,10 @@
             const matchL1 = !l1 || i.l1 === l1;
             const matchL2 = !l2 || i.l2 === l2;
             const matchL3 = !l3 || i.l3 === l3;
-            const matchJudge = !p || i.judge === p;
             const matchTag = !tag || i.specialTag === tag;
             const matchPrice = i.price >= min && i.price <= max;
             
-            return matchSearch && matchL1 && matchL2 && matchL3 && matchJudge && matchTag && matchPrice;
+            return matchSearch && matchL1 && matchL2 && matchL3 && matchTag && matchPrice;
         });
         
         const sort = document.getElementById('sortOrder').value;
