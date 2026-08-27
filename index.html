@@ -272,6 +272,9 @@
             const safeImgUrl = item.imgUrl.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             const safeLink1688 = item.link1688.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             
+            // 修复：处理日期显示，如果日期为空则显示占位符
+            const dateDisplay = item.date && item.date.trim() ? item.date : '日期待更新';
+            
             card.innerHTML = `
                 <div class="judge-tag" onclick="checkLink('${safeLink1688}')">1688</div>
                 ${item.specialTag ? `<div class="special-tag">${item.specialTag}</div>` : ''}
@@ -289,7 +292,7 @@
                         <div class="invite-id-box" onclick="navigator.clipboard.writeText('${safeInviteId}').then(() => alert('✅ 已复制ID: ${safeInviteId}')).catch(() => alert('❌ 复制失败，请手动复制'))">${safeInviteId}</div>
                     </div>
                     <div class="footer-row">
-                        <span>${item.date}</span>
+                        <span>${dateDisplay}</span>
                         <span style="font-weight:bold; color:#555;">${item.modelId}</span>
                         <a href="${item.link}" target="_blank" class="btn-link" rel="noopener noreferrer">原品 &gt;&gt;&gt;</a>
                     </div>
