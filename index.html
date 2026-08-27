@@ -143,6 +143,12 @@
         return str.toString().replace(/^['+]+/, '').replace(/["=\t]/g, '').trim();
     };
 
+    // 清理日期函数 - 去除引号和多余空格
+    const cleanDate = (str) => {
+        if (!str) return "";
+        return str.toString().replace(/^["']+|["']+$/g, '').trim();
+    };
+
     // 数据映射函数
     const mapData = (arr) => {
         return {
@@ -158,7 +164,7 @@
             modelId: cleanId(arr[9] || ""),
             link1688: arr[10] || "",
             judge: arr[11] || "",
-            date: arr[12] || "",
+            date: cleanDate(arr[12] || ""),  // 使用cleanDate清理日期
             specialTag: arr[15] || "",
             modelCount: arr[16] || "1"
         };
@@ -211,6 +217,13 @@
             }
             
             console.log(`✅ 成功加载 ${products.length} 条数据`);
+            
+            // 调试：检查日期数据
+            const dateSample = products.slice(0, 5).map(p => ({
+                raw: p[12],
+                cleaned: cleanDate(p[12] || '')
+            }));
+            console.log('📅 日期数据样本:', dateSample);
             
             // 初始化筛选器
             initFilters(); 
@@ -272,8 +285,8 @@
             const safeImgUrl = item.imgUrl.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             const safeLink1688 = item.link1688.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             
-            // 修复：处理日期显示，如果日期为空则显示占位符
-            const dateDisplay = item.date && item.date.trim() ? item.date : '日期待更新';
+            // 修复：更严格的日期判断 - 检查是否有实际内容且不是空字符串
+            const dateDisplay = (item.date && item.date.length > 0 && item.date !== '""' && item.date !== "''") ? item.date : '日期待更新';
             
             card.innerHTML = `
                 <div class="judge-tag" onclick="checkLink('${safeLink1688}')">1688</div>
